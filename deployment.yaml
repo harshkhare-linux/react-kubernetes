@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: harshkhare/react:latest
+        image:  851725513395.dkr.ecr.us-east-1.amazonaws.com/react:${TAG}
         imagePullPolicy: Always
         resources:
           requests:
