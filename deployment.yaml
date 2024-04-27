@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: harshkhare-frontend-latest
+  template:
+    metadata:
+      labels:
+        app: harshkhare-frontend-latest
+    spec:
+      containers:
+      - name: frontend
+        image: harshkhare/react:latest
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: "100m"   # Specify CPU request (100 milliCPU)
+            memory: "128Mi"   # Specify memory request (128 Megabytes)
+          limits:
+            cpu: "200m"   # Optionally specify CPU limit
+            memory: "256Mi"   # Optionally specify memory limit
+        env:
+        - name: IMAGE_TAG
+          valueFrom:
+            configMapKeyRef:
+              name: image-tag-config
+              key: TAG
+        ports:
+        - containerPort: 3000
+      imagePullSecrets:
+      - name: dockerhub-secret
