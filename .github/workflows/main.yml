@@ -1,0 +1,75 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main  # Adjust the branch name as needed
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Login to Amazon ECR
+      run: |
+        echo Logging in to Amazon ECR....
+        aws --version
+        # Update the following line with your own region
+        aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws configure set region ${{ secrets.AWS_REGION }}
+        aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.ECR_URL }}
+    
+    - name: Build Docker image
+      run: |
+        echo Build started on $(date)
+        echo Building the Docker image...
+        COMMIT_HASH=$(echo ${{ github.sha }} | cut -c 1-7)
+        TAG=${COMMIT_HASH:-latest}
+        echo $TAG
+        sed -i "s#\${TAG}#$TAG#g" deployment.yaml
+        cat deployment.yaml
+        echo ${{ secrets.CONTAINER_NAME }}
+        docker build -t sampleapp:latest .        
+        docker tag sampleapp:latest 851725513395.dkr.ecr.us-east-1.amazonaws.com/react:$TAG
+        docker push 851725513395.dkr.ecr.us-east-1.amazonaws.com/react:$TAG
+
+
+    - name: Set AWS credentials for kubectl
+      run: |
+        echo Setting Environment Variables related to AWS CLI for Kube Config Setup
+        #CREDENTIALS=$(aws sts assume-role --role-arn ${{ secrets.EKS_KUBECTL_ROLE_ARN }} --role-session-name codebuild-kubectl --duration-seconds 900)
+        #export AWS_ACCESS_KEY_ID=$(echo $CREDENTIALS | jq -r '.Credentials.AccessKeyId')
+        #export AWS_SECRET_ACCESS_KEY=$(echo $CREDENTIALS | jq -r '.Credentials.SecretAccessKey')
+
+    - name: Update Kube Config
+      run: |
+        echo Update Kube Config
+        aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }}
+        #kubectl delete configmap image-tag-config
+        
+    - name: Debug deployment file after substitution
+      run: cat deployment.yaml
+
+
+    - name: Apply changes to Kubernetes manifests
+      run: |
+        echo Apply changes to kube manifests
+        kubectl apply -f deployment.yaml
+        echo Completed applying changes to Kubernetes Objects
+
+    - name: Create artifacts
+      run: |
+        echo Create Artifacts
+        printf '[{"name":"01-DEVOPS-Nginx-Deployment.yml","imageUri":"%s"}]' ${{ secrets.REPOSITORY_URI }}:$TAG > build.json
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: build-artifacts
+        path: build.json
+
+   
